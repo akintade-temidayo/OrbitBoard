@@ -1,0 +1,146 @@
+These six features will elevate OrbitBoard to a production-grade platform. Here is the technical breakdown, architectural flow, and exact file updates needed for each item before we write any code.
+
+---
+
+### 1. Global Search Bar (Users & Orbits Search)✅
+
+* **How it works:**
+* As the user types in the header search bar, we trigger a debounced search (e.g. after 200–300ms) against a unified search endpoint `/api/search?q=query`.
+* The search bar displays a dropdown split into two distinct sections: **Orbits** (with `r/orbit_name` + avatar) and **Users** (with `u/username` + avatar).
+* Clicking an Orbit routes to `/r/[orbitName]`; clicking a User routes to `/[username]`.
+
+
+* **Key Files Needed/Updated:**
+* `components/layout/Navbar.jsx` (or `Header.jsx`): Manage search input state, debounced API calls, and render the live dropdown menu.
+* `lib/services/searchService.js`: Front-end service function to hit search endpoints.
+* `app/api/search/route.js` (Backend): Query both `User` (by `username`/`displayName`) and `Orbit` (by `name`/`title`) models using regex/text indexing.
+
+
+
+---
+
+### 2. Friend Toggle, Unadd Modal & Conditional Direct Chat✅
+
+* **How it works:**
+* **State Logic:** The button toggles between `"Add Friend"` and `"Unadd Friend"` (or `"Remove Friend"`).
+* **Modal Logic:** Clicking `"Unadd Friend"` opens a confirmation modal (`UnfriendModal`). Confirming calls `DELETE /api/users/:username/friend` and updates state to `"none"`.
+* **Conditional Chat Button:** The `Chat` button component is conditionally rendered: `friendStatus === 'friends' && <ChatButton/>`.
+
+
+* **Key Files Needed/Updated:**
+* `components/profile/UnfriendModal.jsx` **(New Component)**: A clean modal asking "Are you sure you want to remove u/[username] from your friends list?".
+* `UserProfilePage.jsx`: Integrate `UnfriendModal`, update button state logic, and wrap the `<MessageSquare/>` chat button in the `friendStatus === 'friends'` condition.
+
+
+
+---
+
+### 3. Edit User Profile (Avatar, Bio, Display Name)✅
+
+* **How it works:**
+* Extend the `SettingsTab` component inside `UserProfilePage.jsx` (or create a dedicated `EditProfileModal`/`EditProfileForm`).
+* Users can upload/change their `avatarUrl`, update `displayName` (nickname), and modify their `bio`.
+* Submitting sends a `PATCH /api/users/me` request to update profile fields in the database and context state (`useAuth`).
+
+
+* **Key Files Needed/Updated:**
+* `components/profile/SettingsTab.jsx`: Expand from just the "Danger Zone" to include form sections for Avatar Upload/Picker, Display Name input, and Bio textarea.
+* `lib/services/userService.js`: Add `updateProfile(data)` function.
+* `app/api/users/me/route.js` (Backend): Handle `PATCH` requests to update user metadata.
+
+
+
+---
+
+### 4. Real-time Feed Filters (Hot, Rising, New, Top)✅
+
+* **Yes, you are 100% correct—this heavily relies on the backend database sorting algorithms.**
+* **Filter Definitions:**
+1. **New:** Sort pure chronological order (`createdAt: -1`).
+2. **Top:** Sort by raw score (`upvotes - downvotes` or highest comment/like count).
+3. **Hot:** A decay algorithm (e.g., Reddit’s classic hot algorithm: score divided by `(time_elapsed + 2)^1.5`).
+4. **Rising:** Higher weight on high velocity of recent upvotes/comments in the past 1–3 hours.
+
+
+* **Front-end Integration:**
+* Clicking a filter updates URL search params (e.g., `/?sort=hot`, `/?sort=rising`).
+* `Feed.jsx` listens to query param changes and re-fetches posts via `postService.getPosts({ sort })`.
+
+
+* **Key Files Needed/Updated:**
+* `components/feed/FeedFilters.jsx`: Active tab styling tied to URL search parameters.
+* `app/api/posts/route.js` (Backend): Implement MongoDB aggregation / SQL queries for `hot`, `rising`, `top`, and `new`.
+
+
+
+---
+
+### 5. Custom 404 - Not Found Page & Invalid Orbit/User Navigation✅
+
+* **How it works:**
+* If a user navigates to `/[username]` or `/r/[orbitName]` and the API returns a `404` or `null` user/orbit, Next.js routes them to the custom 404 page (or triggers `notFound()` from `next/navigation`).
+* If the global search input receives no matches and the user hits Enter, it takes them to a search results page showing `"No results found for '[query]'"` with a 404 graphic.
+
+
+* **Key Files Needed/Updated:**
+* `app/not-found.jsx` **(New Page)**: Global Next.js 404 error layout with an OrbitBoard themed graphic, informative message, and "Back to Home" CTA.
+* `app/(main)/[username]/page.jsx` & `app/(main)/r/[orbitName]/page.jsx`: Invoke `notFound()` if data doesn't exist.
+
+
+
+---
+
+### 6. Voice Notes in Rich Text Area
+
+* **How it works:**
+* **Media Recorder API:** Browser's native `navigator.mediaDevices.getUserMedia({ audio: true })` captures audio stream into a `Blob`.
+* **Recording UI:** A mic button inside the post/comment rich text editor that shows recording duration, play/pause preview, and re-record/delete options.
+* **Storage:** On submit, the audio blob is uploaded to `/api/uploads` (Cloudinary/S3), yielding an `audioUrl` that gets stored in the post/comment `mediaUrls` or `voiceNoteUrl` field.
+* **Audio Player:** Custom wave-form or simple audio player component to play voice notes inline inside posts/comments.
+
+
+* **Key Files Needed/Updated:**
+* `components/ui/VoiceRecorder.jsx` **(New Component)**: Microphone recorder widget with timer and preview state.
+* `components/ui/AudioPlayer.jsx` **(New Component)**: Clean custom audio player for playback in feed/comments.
+* `components/posts/CreatePostForm.jsx` & `components/comments/CommentInput.jsx`: Embed `VoiceRecorder`.
+
+
+
+---
+
+### Summary of New Files to Create
+
+1. `components/profile/UnfriendModal.jsx`
+2. `components/profile/EditProfileForm.jsx`
+3. `components/ui/VoiceRecorder.jsx`
+4. `components/ui/AudioPlayer.jsx`
+5. `app/not-found.jsx`
+
+Got it! Added to the roadmap.
+
+### 7. Interactive Direct Chat Header (Clickable Profile Navigation)
+
+* **How it works:**
+* Wrap both the user's avatar icon and username text (`u/user`) in the conversation top bar inside Next.js `<Link href="{`/${recipientUsername}`}">`.
+* Add clean hover states (e.g., `hover:underline` and soft background hover highlight on the avatar) so the user gets clear visual feedback that it's clickable.
+* Clicking it will instantly navigate the user to `(main)/[username]/page.jsx`.
+
+
+* **Key Files Needed/Updated:**
+* `components/chat/ChatHeader.jsx` (or the direct chat layout component in `app/(main)/messages/`): Wrap user header elements in `<Link>` components targeting `/${targetUsername}`.
+
+
+
+---
+
+### Updated Feature Checklist Summary
+
+1. **Global Search Bar** (Users & Orbits search dropdown)
+2. **Friend Actions** (Add/Unadd toggle, confirmation modal, and conditional Chat button)
+3. **Profile Editing** (Avatar, bio, and display name updates)
+4. **Feed Filters** (Hot, Rising, New, Top logic)
+5. **Custom 404 Page** (Handled via Next.js `not-found.jsx`)
+6. **Voice Notes** (Media recorder in rich text area)
+7. **Interactive Chat Header** (Clickable avatar & username leading to user profile)
+
+Which item should we write code for first?
